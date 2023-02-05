@@ -12,6 +12,4 @@ url = "*"
 json = "*"
 futures-util = "*"
 futures-channel = "*"
-
-mini-redis = "0.4"
 bytes = "1"
