@@ -67,11 +67,30 @@ struct Initialize {}
 
 impl Initialize {
     fn start() -> Vec<Message> {
-        let auth = object! { action: "auth", params: "my_secret" };
         let subscription = object! { action: "subscribe", params: "Q.T" };
-        vec![
-            Message::from(auth.dump()),
-            Message::from(subscription.dump()),
-        ]
+        vec![]
+    }
+    fn auth() -> impl Stream<Item = Message> {
+        one_message_with(object! { action: "auth", params: "my_secret" })
+    }
+
+    fn subscribe() -> impl Stream<Item = Message> {
+        one_message_with(object! { action: "subscribe", params: "Q.T" })
+    }
+}
+
+fn one_message_with(json: json::JsonValue) -> impl Stream<Item = Message> {
+    let msg = Message::text(json.dump());
+    stream::once(future::ready(msg))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        let result = Initialize::start();
+        assert_eq!(result, 4);
     }
 }
