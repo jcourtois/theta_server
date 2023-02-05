@@ -7,12 +7,10 @@ rust-version = "1.66"
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = { version = "*", features = ["native-tls"] }
-native-tls = "*"
 url = "*"
-json = "*"
 futures-util = "*"
 futures-channel = "*"
-bytes = "1"
+serde_json = "1.0"
 
 [dev-dependencies]
 tokio-test = "*"

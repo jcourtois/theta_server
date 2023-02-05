@@ -1,9 +1,5 @@
 use futures_util::{future, pin_mut, stream, Future, Stream, StreamExt};
-use json::object;
-use tokio::{
-    io::AsyncWriteExt,
-    net::TcpStream,
-};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 use tokio_tungstenite::{
     connect_async,
     tungstenite::{protocol::Message, Error},
@@ -45,34 +41,37 @@ fn process_inbound_socket_messages(tls_source: TlsSocketSource) -> impl Future<O
         let data = message.unwrap().into_data();
         tokio::io::stdout().write_all(&data).await.unwrap();
     })
-}   
+}
 
 struct Initialize {}
 
 impl Initialize {
     fn auth() -> impl Stream<Item = Message> {
-        one_message_with(object! { action: "auth", params: "my_secret" })
+        one_message_with(r#"{"action":"auth","params":"my_secret"}"#.to_string())
     }
 
     fn subscribe() -> impl Stream<Item = Message> {
-        one_message_with(object! { action: "subscribe", params: "Q.T" })
+        one_message_with(r#"{"action":"subscribe","params:"Q.T"}"#.to_string())
     }
 }
 
-fn one_message_with(json: json::JsonValue) -> impl Stream<Item = Message> {
-    let msg = Message::text(json.dump());
+fn one_message_with(json: String) -> impl Stream<Item = Message> {
+    let msg = Message::text(json);
     stream::once(future::ready(msg))
 }
 
 #[cfg(test)]
 mod initialize {
-    use futures_test::{assert_stream_next, assert_stream_done};
     use super::*;
+    use futures_test::{assert_stream_done, assert_stream_next};
 
     #[tokio::test]
     async fn can_create_auth_messages() {
         let mut r = Initialize::auth();
-        assert_stream_next!(r, Message::text(r#"{"action":"auth","params":"my_secret"}"#));
+        assert_stream_next!(
+            r,
+            Message::text(r#"{"action":"auth","params":"my_secret"}"#)
+        );
         assert_stream_done!(r);
     }
 }

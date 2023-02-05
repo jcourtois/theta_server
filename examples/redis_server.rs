@@ -1,9 +1,8 @@
-use bytes::Bytes;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
 
-type Db = Arc<Mutex<HashMap<String, Bytes>>>;
+type Db = Arc<Mutex<HashMap<String, ()>>>;
 
 #[tokio::main]
 async fn main() {

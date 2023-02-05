@@ -1,25 +1,22 @@
-use bytes::Bytes;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
-
-type Db = Arc<Mutex<HashMap<String, Bytes>>>;
 
 #[tokio::main]
 async fn main() {
     let listener = TcpListener::bind("127.0.0.1:6379").await.unwrap();
 
-    let db = Arc::new(Mutex::new(HashMap::new()));
+    let db: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
     loop {
         let (socket, _) = listener.accept().await.unwrap();
-        let db = db.clone();
+        let _db = db.clone();
 
         tokio::spawn(async move {
-            process(socket, db).await;
+            process(socket, _db).await;
         });
     }
 }
 
-async fn process(_socket: TcpStream, _db: Db) {
+async fn process(_socket: TcpStream, _db: Arc<Mutex<HashMap<String, String>>>) {
     ()
 }
