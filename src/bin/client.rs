@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use futures_util::{future, pin_mut, stream, Future, Stream, StreamExt};
 use json::object;
 use tokio::{
@@ -8,7 +6,7 @@ use tokio::{
 };
 use tokio_tungstenite::{
     connect_async,
-    tungstenite::{self, protocol::Message},
+    tungstenite::{protocol::Message, Error},
     MaybeTlsStream, WebSocketStream,
 };
 
@@ -36,7 +34,7 @@ async fn main() {
 
 fn process_outbound_socket_messages(
     tls_sink: TlsSocketSink,
-) -> impl Future<Output = Result<(), tungstenite::Error>> {
+) -> impl Future<Output = Result<(), Error>> {
     auth().map(Ok).forward(tls_sink)
 }
 
@@ -62,5 +60,18 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>) {
         };
         buf.truncate(n);
         tx.unbounded_send(Message::binary(buf)).unwrap();
+    }
+}
+
+struct Initialize {}
+
+impl Initialize {
+    fn start() -> Vec<Message> {
+        let auth = object! { action: "auth", params: "my_secret" };
+        let subscription = object! { action: "subscribe", params: "Q.T" };
+        vec![
+            Message::from(auth.dump()),
+            Message::from(subscription.dump()),
+        ]
     }
 }
