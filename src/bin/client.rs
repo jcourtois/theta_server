@@ -1,7 +1,7 @@
 use futures_util::{future, pin_mut, stream, Future, Stream, StreamExt};
 use json::object;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::AsyncWriteExt,
     net::TcpStream,
 };
 use tokio_tungstenite::{
@@ -35,12 +35,9 @@ async fn main() {
 fn process_outbound_socket_messages(
     tls_sink: TlsSocketSink,
 ) -> impl Future<Output = Result<(), Error>> {
-    auth().map(Ok).forward(tls_sink)
-}
-
-fn auth() -> impl Stream<Item = Message> {
-    let auth = object! { action: "auth", params: "my_secret" };
-    stream::iter(vec![Message::text(auth.to_string())])
+    let auth = Initialize::auth();
+    let _subscribe = Initialize::subscribe();
+    auth.map(Ok).forward(tls_sink)
 }
 
 fn process_inbound_socket_messages(tls_source: TlsSocketSource) -> impl Future<Output = ()> {
@@ -48,28 +45,11 @@ fn process_inbound_socket_messages(tls_source: TlsSocketSource) -> impl Future<O
         let data = message.unwrap().into_data();
         tokio::io::stdout().write_all(&data).await.unwrap();
     })
-}
-
-async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>) {
-    let mut stdin = tokio::io::stdin();
-    loop {
-        let mut buf = vec![0; 1024];
-        let n = match stdin.read(&mut buf).await {
-            Err(_) | Ok(0) => break,
-            Ok(n) => n,
-        };
-        buf.truncate(n);
-        tx.unbounded_send(Message::binary(buf)).unwrap();
-    }
-}
+}   
 
 struct Initialize {}
 
 impl Initialize {
-    fn start() -> Vec<Message> {
-        let subscription = object! { action: "subscribe", params: "Q.T" };
-        vec![]
-    }
     fn auth() -> impl Stream<Item = Message> {
         one_message_with(object! { action: "auth", params: "my_secret" })
     }
@@ -85,12 +65,14 @@ fn one_message_with(json: json::JsonValue) -> impl Stream<Item = Message> {
 }
 
 #[cfg(test)]
-mod tests {
+mod initialize {
+    use futures_test::{assert_stream_next, assert_stream_done};
     use super::*;
 
-    #[test]
-    fn it_works() {
-        let result = Initialize::start();
-        assert_eq!(result, 4);
+    #[tokio::test]
+    async fn can_create_auth_messages() {
+        let mut r = Initialize::auth();
+        assert_stream_next!(r, Message::text(r#"{"action":"auth","params":"my_secret"}"#));
+        assert_stream_done!(r);
     }
 }

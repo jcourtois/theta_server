@@ -13,3 +13,7 @@ json = "*"
 futures-util = "*"
 futures-channel = "*"
 bytes = "1"
+
+[dev-dependencies]
+tokio-test = "*"
+futures-test = "*"
