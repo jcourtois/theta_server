@@ -1,4 +1,7 @@
-use futures_util::{future, pin_mut, stream, Future, StreamExt};
+use std::fmt::format;
+
+use futures_util::{future, pin_mut, stream, Future, Stream, StreamExt};
+use json::object;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
@@ -21,6 +24,7 @@ async fn main() {
     let url = url::Url::parse(&connect_addr).unwrap();
     let (ws_stream, _) = connect_async(url).await.expect("Failed to connect");
     let (write, read) = ws_stream.split();
+
     let (data_to_ws, data_from_ws) = (
         process_outbound_socket_messages(write),
         process_inbound_socket_messages(read),
@@ -33,14 +37,15 @@ async fn main() {
 fn process_outbound_socket_messages(
     tls_sink: TlsSocketSink,
 ) -> impl Future<Output = Result<(), tungstenite::Error>> {
-    let (stdin_tx, stdin_rx) = futures_channel::mpsc::unbounded();
-    tokio::spawn(read_stdin(stdin_tx));
-    stdin_rx.map(Ok).forward(tls_sink)
+    auth().map(Ok).forward(tls_sink)
 }
 
-fn process_inbound_socket_messages(
-    tls_source: TlsSocketSource
-) -> impl Future<Output = ()> {
+fn auth() -> impl Stream<Item = Message> {
+    let auth = object! { action: "auth", params: "my_secret" };
+    stream::iter(vec![Message::text(auth.to_string())])
+}
+
+fn process_inbound_socket_messages(tls_source: TlsSocketSource) -> impl Future<Output = ()> {
     tls_source.for_each(|message| async {
         let data = message.unwrap().into_data();
         tokio::io::stdout().write_all(&data).await.unwrap();
