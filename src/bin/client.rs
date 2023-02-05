@@ -1,78 +1,41 @@
-use bytes::Bytes;
-use mini_redis::client;
-use tokio::sync::oneshot;
-
-type Responder<T> = oneshot::Sender<mini_redis::Result<T>>;
-
-#[derive(Debug)]
-enum Command {
-    Get {
-        key: String,
-        resp: Responder<Option<Bytes>>,
-    },
-    Set {
-        key: String,
-        val: Bytes,
-        resp: Responder<()>,
-    },
-}
-
-use tokio::sync::mpsc;
+use futures_util::{future, pin_mut, StreamExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 #[tokio::main]
 async fn main() {
-    let (tx, mut rx) = mpsc::channel(32);
+    let connect_addr = std::env::args()
+        .nth(1)
+        .expect("This program requires at least one arguement");
 
-    let tx2 = tx.clone();
+    let url = url::Url::parse(&connect_addr).unwrap();
+    let (stdin_tx, stdin_rx) = futures_channel::mpsc::unbounded();
+    tokio::spawn(read_stdin(stdin_tx));
+    let (ws_stream, _) = connect_async(url).await.expect("Failed to connect");
 
-    let manager = tokio::spawn(async move {
-        let mut client = client::connect("127.0.0.1:6379").await.unwrap();
-
-        while let Some(cmd) = rx.recv().await {
-            use Command::*;
-
-            match cmd {
-                Get { key, resp } => {
-                    let res = client.get(&key).await;
-                    let _ = resp.send(res);
-                }
-                Set { key, val, resp } => {
-                    let res = client.set(&key, val).await;
-                    let _ = resp.send(res);
-                }
-            }
-        }
-    });
-
-    // Spawn two tasks, one gets a key, the other sets a key
-    let t1 = tokio::spawn(async move {
-        let (resp_tx, resp_rx) = oneshot::channel();
-        tx.send(Command::Get {
-            key: "foo".to_string(),
-            resp: resp_tx,
+    println!("WebSocket handshake has been successfully completed");
+    let (write, read) = ws_stream.split();
+    let stdin_to_ws = stdin_rx.map(Ok).forward(write);
+    let ws_to_stdout = {
+        read.for_each(|message| async {
+            let data = message.unwrap().into_data();
+            tokio::io::stdout().write_all(&data).await.unwrap();
         })
-        .await
-        .unwrap();
+    };
 
-        let res = resp_rx.await;
-        println!("GOT = {:?}", res);
-    });
+    pin_mut!(stdin_to_ws, ws_to_stdout);
+    future::select(stdin_to_ws, ws_to_stdout).await;
+}
 
-    let t2 = tokio::spawn(async move {
-        let (resp_tx, resp_rx) = oneshot::channel();
-        tx2.send(Command::Set {
-            key: "foo".to_string(),
-            val: "bar".into(),
-            resp: resp_tx,
-        })
-        .await
-        .unwrap();
-
-        let res = resp_rx.await;
-        println!("GOT = {:?}", res);
-    });
-
-    t1.await.unwrap();
-    t2.await.unwrap();
-    manager.await.unwrap();
+async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>) {
+    let mut stdin = tokio::io::stdin();
+    loop {
+        let mut buf = vec![0; 1024];
+        let n = match stdin.read(&mut buf).await {
+            Err(_) | Ok(0) => break,
+            Ok(n) => n,
+        };
+        buf.truncate(n);
+        tx.unbounded_send(Message::binary(buf)).unwrap();
+    }
 }
