@@ -47,15 +47,15 @@ struct Initialize {}
 
 impl Initialize {
     fn auth() -> impl Stream<Item = Message> {
-        one_message_with(r#"{"action":"auth","params":"my_secret"}"#.to_string())
+        one_message_with(r#"{"action":"auth","params":"my_secret"}"#)
     }
 
     fn subscribe() -> impl Stream<Item = Message> {
-        one_message_with(r#"{"action":"subscribe","params:"Q.T"}"#.to_string())
+        one_message_with(r#"{"action":"subscribe","params":"Q.T"}"#)
     }
 }
 
-fn one_message_with(json: String) -> impl Stream<Item = Message> {
+fn one_message_with(json: &str) -> impl Stream<Item = Message> {
     let msg = Message::text(json);
     stream::once(future::ready(msg))
 }
@@ -67,11 +67,17 @@ mod initialize {
 
     #[tokio::test]
     async fn can_create_auth_messages() {
+        let expected = Message::text(r#"{"action":"auth","params":"my_secret"}"#);
         let mut r = Initialize::auth();
-        assert_stream_next!(
-            r,
-            Message::text(r#"{"action":"auth","params":"my_secret"}"#)
-        );
+        assert_stream_next!(r, expected);
+        assert_stream_done!(r);
+    }
+
+    #[tokio::test]
+    async fn can_create_subscribe_messages() {
+        let expected = Message::text(r#"{"action":"subscribe","params":"Q.T"}"#);
+        let mut r = Initialize::subscribe();
+        assert_stream_next!(r, expected);
         assert_stream_done!(r);
     }
 }
