@@ -1,5 +1,6 @@
-use futures_util::{future, pin_mut, stream, Future, Stream, StreamExt};
-use models::polygon::Request;
+pub mod models;
+
+use futures_util::{future, pin_mut, stream, Future, StreamExt};
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 use tokio_tungstenite::{
     connect_async,
@@ -9,8 +10,6 @@ use tokio_tungstenite::{
 
 type TlsSocketSource = stream::SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 type TlsSocketSink = stream::SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
-
-pub mod models;
 
 #[tokio::main]
 async fn main() {
@@ -34,8 +33,9 @@ async fn main() {
 fn process_outbound_socket_messages(
     tls_sink: TlsSocketSink,
 ) -> impl Future<Output = Result<(), Error>> {
-    let message = Request::auth("my_secret").as_message();
-    stream_one(message).map(Ok).forward(tls_sink)
+    models::StreamOne::auth("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
+        .map(Ok)
+        .forward(tls_sink)
 }
 
 fn process_inbound_socket_messages(tls_source: TlsSocketSource) -> impl Future<Output = ()> {
@@ -43,31 +43,4 @@ fn process_inbound_socket_messages(tls_source: TlsSocketSource) -> impl Future<O
         let data = message.unwrap().into_data();
         tokio::io::stdout().write_all(&data).await.unwrap();
     })
-}
-
-fn stream_one(message: Message) -> impl Stream<Item = Message> {
-    stream::once(future::ready(message))
-}
-
-#[cfg(test)]
-mod initialize {
-    use super::*;
-    use futures_test::{assert_stream_done, assert_stream_next};
-
-    #[tokio::test]
-    async fn can_create_auth_messages() {
-        let expected =
-            Message::text(r#"{"action":"auth","params":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}"#);
-        let mut r = stream_one(Request::auth("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx").as_message());
-        assert_stream_next!(r, expected);
-        assert_stream_done!(r);
-    }
-
-    #[tokio::test]
-    async fn can_create_subscribe_messages() {
-        let expected = Message::text(r#"{"action":"subscribe","params":"Q.T"}"#);
-        let mut r = stream_one(Request::subscribe(std::vec!["T"]).as_message());
-        assert_stream_next!(r, expected);
-        assert_stream_done!(r);
-    }
 }
