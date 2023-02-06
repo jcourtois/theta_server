@@ -1,4 +1,5 @@
 use futures_util::{future, pin_mut, stream, Future, Stream, StreamExt};
+use models::polygon::Request;
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 use tokio_tungstenite::{
     connect_async,
@@ -8,6 +9,8 @@ use tokio_tungstenite::{
 
 type TlsSocketSource = stream::SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 type TlsSocketSink = stream::SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
+
+pub mod models;
 
 #[tokio::main]
 async fn main() {
@@ -31,9 +34,8 @@ async fn main() {
 fn process_outbound_socket_messages(
     tls_sink: TlsSocketSink,
 ) -> impl Future<Output = Result<(), Error>> {
-    let auth = Initialize::auth();
-    let _subscribe = Initialize::subscribe();
-    auth.map(Ok).forward(tls_sink)
+    let message = Request::auth("my_secret").as_message();
+    stream_one(message).map(Ok).forward(tls_sink)
 }
 
 fn process_inbound_socket_messages(tls_source: TlsSocketSource) -> impl Future<Output = ()> {
@@ -43,21 +45,8 @@ fn process_inbound_socket_messages(tls_source: TlsSocketSource) -> impl Future<O
     })
 }
 
-struct Initialize {}
-
-impl Initialize {
-    fn auth() -> impl Stream<Item = Message> {
-        one_message_with(r#"{"action":"auth","params":"my_secret"}"#)
-    }
-
-    fn subscribe() -> impl Stream<Item = Message> {
-        one_message_with(r#"{"action":"subscribe","params":"Q.T"}"#)
-    }
-}
-
-fn one_message_with(json: &str) -> impl Stream<Item = Message> {
-    let msg = Message::text(json);
-    stream::once(future::ready(msg))
+fn stream_one(message: Message) -> impl Stream<Item = Message> {
+    stream::once(future::ready(message))
 }
 
 #[cfg(test)]
@@ -67,8 +56,9 @@ mod initialize {
 
     #[tokio::test]
     async fn can_create_auth_messages() {
-        let expected = Message::text(r#"{"action":"auth","params":"my_secret"}"#);
-        let mut r = Initialize::auth();
+        let expected =
+            Message::text(r#"{"action":"auth","params":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}"#);
+        let mut r = stream_one(Request::auth("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx").as_message());
         assert_stream_next!(r, expected);
         assert_stream_done!(r);
     }
@@ -76,7 +66,7 @@ mod initialize {
     #[tokio::test]
     async fn can_create_subscribe_messages() {
         let expected = Message::text(r#"{"action":"subscribe","params":"Q.T"}"#);
-        let mut r = Initialize::subscribe();
+        let mut r = stream_one(Request::subscribe(std::vec!["T"]).as_message());
         assert_stream_next!(r, expected);
         assert_stream_done!(r);
     }

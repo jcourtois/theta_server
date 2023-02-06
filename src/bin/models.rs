@@ -30,10 +30,9 @@ pub mod polygon {
             if targets.is_empty() {
                 panic!("need to subscribe to something!")
             }
-            let target = targets.join(",");
             Request {
                 action: Action::Subscribe,
-                params: target,
+                params: String::from("Q.") + &targets.join(","),
             }
         }
 
@@ -66,15 +65,15 @@ pub mod polygon {
         fn serialize_subscribe_properly() {
             assert_eq!(
                 serde_json::to_string(&Request::subscribe(std::vec!["T"])).unwrap(),
-                r#"{"action":"subscribe","params":"T"}"#
+                r#"{"action":"subscribe","params":"Q.T"}"#
             );
             assert_eq!(
                 serde_json::to_string(&Request::subscribe(std::vec!["T", "F"])).unwrap(),
-                r#"{"action":"subscribe","params":"T,F"}"#
+                r#"{"action":"subscribe","params":"Q.T,F"}"#
             );
             assert_eq!(
                 serde_json::to_string(&Request::subscribe(std::vec!["MMM", "T", "F"])).unwrap(),
-                r#"{"action":"subscribe","params":"MMM,T,F"}"#
+                r#"{"action":"subscribe","params":"Q.MMM,T,F"}"#
             );
         }
 
@@ -82,7 +81,7 @@ pub mod polygon {
         fn serialize_subscribe_into_message() {
             assert_eq!(
                 Request::subscribe(std::vec!["T", "F"]).as_message(),
-                Message::text(r#"{"action":"subscribe","params":"T,F"}"#)
+                Message::text(r#"{"action":"subscribe","params":"Q.T,F"}"#)
             );
         }
 
@@ -99,5 +98,3 @@ pub mod polygon {
         }
     }
 }
-
-fn main() {}
