@@ -1,4 +1,5 @@
-use futures_util::{future, pin_mut, StreamExt};
+use futures_util::StreamExt;
+use theta_server::models;
 use tokio_tungstenite::connect_async;
 
 #[tokio::main]
@@ -9,13 +10,23 @@ async fn main() {
 
     let url = url::Url::parse(&connect_addr).unwrap();
     let (ws_stream, _) = connect_async(url).await.expect("Failed to connect");
-    let (write, read) = ws_stream.split();
+    let (sink, stream) = ws_stream.split();
 
-    let (data_to_ws, data_from_ws) = (
-        theta_server::process_outbound_socket_messages(write),
-        theta_server::process_inbound_socket_messages(read),
-    );
+    let write_handle = tokio::spawn(async {
+        let auth = models::StreamOne::auth("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+        let subscribe = models::StreamOne::subscribe(vec!["T"]);
+        auth.chain(subscribe).map(Ok).forward(sink).await
+    });
 
-    pin_mut!(data_to_ws, data_from_ws);
-    future::select(data_to_ws, data_from_ws).await;
+    let read_handle = tokio::spawn(async move {
+        tokio::pin!(stream);
+        loop {
+            if let Some(Ok(res)) = stream.next().await {
+                let data = res.into_text().unwrap().to_string();
+                println!("{data}");
+            }
+        }
+    });
+
+    let _ending = tokio::join!(write_handle, read_handle);
 }

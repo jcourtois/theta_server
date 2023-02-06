@@ -17,8 +17,8 @@ enum Action {
 
 impl Request {
     pub fn auth(secret: &str) -> Request {
-        if secret.len() != 33 {
-            panic!("secret should be 33 characters in length")
+        if secret.len() != 32 {
+            panic!("secret should be 32 characters in length")
         }
         Request {
             action: Action::Auth,
@@ -59,16 +59,16 @@ mod actions {
     #[test]
     fn serialize_auth_properly() {
         assert_eq!(
-            serde_json::to_string(&Request::auth(&"x".repeat(33))).unwrap(),
-            r#"{"action":"auth","params":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}"#
+            serde_json::to_string(&Request::auth(&"x".repeat(32))).unwrap(),
+            r#"{"action":"auth","params":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}"#
         );
     }
 
     #[test]
     fn serialize_auth_into_message() {
         assert_eq!(
-            Request::auth(&"x".repeat(33)).as_message(),
-            Message::text(r#"{"action":"auth","params":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}"#)
+            Request::auth(&"x".repeat(32)).as_message(),
+            Message::text(r#"{"action":"auth","params":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}"#)
         );
     }
 
@@ -97,8 +97,8 @@ mod actions {
     }
 
     #[test]
-    #[should_panic(expected = "secret should be 33 characters in length")]
-    fn auth_needs_a_secret_33_chars_in_length() {
+    #[should_panic(expected = "secret should be 32 characters in length")]
+    fn auth_needs_a_secret_32_chars_in_length() {
         Request::auth("");
     }
 
@@ -113,8 +113,8 @@ mod actions {
     #[tokio::test]
     async fn can_create_auth_messages() {
         let expected =
-            Message::text(r#"{"action":"auth","params":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}"#);
-        let mut r = StreamOne::auth("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+            Message::text(r#"{"action":"auth","params":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}"#);
+        let mut r = StreamOne::auth("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
         assert_stream_next!(r, expected);
         assert_stream_done!(r);
     }
