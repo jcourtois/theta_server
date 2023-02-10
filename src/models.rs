@@ -9,7 +9,7 @@ pub struct Request {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 enum Action {
     Auth,
     Subscribe,
@@ -32,12 +32,47 @@ impl Request {
         }
         Request {
             action: Action::Subscribe,
-            params: String::from("Q.") + &targets.join(","),
+            params: String::from("A.") + &targets.join(","),
         }
     }
 
     pub fn as_message(&self) -> Message {
         Message::text(serde_json::to_string(self).unwrap())
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct Response {
+    ev: String,
+    pub status: Status,
+    message: String,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum Status {
+    Connected,
+    AuthFailed,
+    AuthSuccess,
+    Success,
+}
+
+impl Response {
+    pub fn is_connected(&self) -> bool {
+        self.status == Status::Connected
+    }
+
+    pub fn is_auth_success(&self) -> bool {
+        self.status == Status::AuthSuccess
+    }
+
+    pub fn is_success(&self) -> bool {
+        self.status == Status::Success
+    }
+
+    pub fn from_message(message: Message) -> Vec<Response> {
+        let str = message.into_text().unwrap();
+        serde_json::from_str::<Vec<Response>>(&str).unwrap()
     }
 }
 
@@ -73,18 +108,48 @@ mod actions {
     }
 
     #[test]
+    fn deserialize_connection_confirmation() {
+        assert_eq!(
+            serde_json::from_str::<Vec<Response>>(
+                r#"[{"ev":"status","status":"connected","message":"Connected Successfully"}]"#,
+            )
+            .unwrap(),
+            vec![Response {
+                ev: String::from("status"),
+                status: Status::Connected,
+                message: String::from("Connected Successfully")
+            }]
+        );
+    }
+
+    #[test]
+    fn deserialize_authentication_confirmation() {
+        assert_eq!(
+            serde_json::from_str::<Vec<Response>>(
+                r#"[{"ev":"status","status":"auth_success","message":"authenticated"}]"#,
+            )
+            .unwrap(),
+            vec![Response {
+                ev: String::from("status"),
+                status: Status::AuthSuccess,
+                message: String::from("authenticated")
+            }]
+        );
+    }
+
+    #[test]
     fn serialize_subscribe_properly() {
         assert_eq!(
             serde_json::to_string(&Request::subscribe(std::vec!["T"])).unwrap(),
-            r#"{"action":"subscribe","params":"Q.T"}"#
+            r#"{"action":"subscribe","params":"A.T"}"#
         );
         assert_eq!(
             serde_json::to_string(&Request::subscribe(std::vec!["T", "F"])).unwrap(),
-            r#"{"action":"subscribe","params":"Q.T,F"}"#
+            r#"{"action":"subscribe","params":"A.T,F"}"#
         );
         assert_eq!(
             serde_json::to_string(&Request::subscribe(std::vec!["MMM", "T", "F"])).unwrap(),
-            r#"{"action":"subscribe","params":"Q.MMM,T,F"}"#
+            r#"{"action":"subscribe","params":"A.MMM,T,F"}"#
         );
     }
 
@@ -92,7 +157,7 @@ mod actions {
     fn serialize_subscribe_into_message() {
         assert_eq!(
             Request::subscribe(std::vec!["T", "F"]).as_message(),
-            Message::text(r#"{"action":"subscribe","params":"Q.T,F"}"#)
+            Message::text(r#"{"action":"subscribe","params":"A.T,F"}"#)
         );
     }
 
@@ -121,7 +186,7 @@ mod actions {
 
     #[tokio::test]
     async fn can_create_subscribe_messages() {
-        let expected = Message::text(r#"{"action":"subscribe","params":"Q.T"}"#);
+        let expected = Message::text(r#"{"action":"subscribe","params":"A.T"}"#);
         let mut r = StreamOne::subscribe(std::vec!["T"]);
         assert_stream_next!(r, expected);
         assert_stream_done!(r);
